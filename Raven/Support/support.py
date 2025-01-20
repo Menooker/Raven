@@ -70,7 +70,7 @@ def gep_simple(population, toolbox, n_generations=100, n_elites=1,
         fitnesses = toolbox.map(toolbox.evaluate, invalid_individuals)
         for ind, fit in zip(invalid_individuals, fitnesses):
             ind.fitness.values = fit
-        no_rep = list(dict([(str(ind),ind) for ind in population]).values())
+        no_rep = list(dict([( (str(ind),ind.fitness.values[0]) ,ind) for ind in population if ind.fitness.valid]).values())
         # record statistics and log
         if hall_of_fame is not None:
             hall_of_fame.update(no_rep)
@@ -83,7 +83,7 @@ def gep_simple(population, toolbox, n_generations=100, n_elites=1,
             break
 
         # selection with elitism
-        elites = deap.tools.selBest(no_rep, k=n_elites)
+        elites = deap.tools.selTournament(no_rep, k=n_elites, tournsize=15)
         offspring = toolbox.select(no_rep, len(population) - n_elites)
 
         # replication

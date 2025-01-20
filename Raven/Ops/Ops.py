@@ -87,7 +87,7 @@ class Op(ABC):
         super().__init__()
         self.operands: List['Op'] = [op if isinstance(op, Op) else Constant(op) for op in operands]
 
-    def legalize_operands(self, operands: List['Op']) -> Tuple[List['Op'], List[Dimension], 'Constant', bool]:
+    def legalize_operands(self, operands: List['Op'], inputs, namespace) -> Tuple[List['Op'], List[Dimension], 'Constant', bool]:
         '''
         return newoperands, dims, first_const, all_const
         '''
@@ -96,7 +96,7 @@ class Op(ABC):
         dims = []
         first_const = None
         for op in operands:
-            newop, dim = op.legalize()
+            newop, dim = op.legalize(inputs, namespace)
             if not isinstance(newop, Constant):
                 all_const = False
             elif first_const is None:
@@ -116,7 +116,7 @@ class Op(ABC):
         return getattr(namespace, self.__class__.__name__)(*args)
 
     @abstractmethod
-    def legalize(self) -> Tuple['Op', Dimension]:
+    def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
         pass
 
 class ZeroArgsTrait:
@@ -153,7 +153,7 @@ class Input(NoConstArgTrait, ZeroArgsTrait, Op):
         self.dim = dim
     def compute(self, inputs, namespace, args) -> Any:
         return inputs[self.name]
-    def legalize(self) -> Tuple['Op', Dimension]:
+    def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
         return self, self.dim
 
 vopen = Input("open", Money())
@@ -169,7 +169,7 @@ class Constant(NoConstArgTrait, ZeroArgsTrait, Op):
         self.val = v
     def compute(self, inputs, namespace, args) -> Any:
         return self.val
-    def legalize(self) -> Tuple['Op', Dimension]:
+    def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
         return self, PureNumber()
 
 def _get_first_non_const_dim(newoperands, dims) -> Dimension:
@@ -199,10 +199,10 @@ class BinaryOp(NoConstArgTrait, TwoArgsTrait, Op):
     def __init__(self, v1: Op, v2: Op) -> None:
         super().__init__([v1, v2])
 
-def _legalize_or_compute(op: Op):
-    newoperands, dims, _, all_const = op.legalize_operands(op.operands)
+def _legalize_or_compute(op: Op, inputs, namespace):
+    newoperands, dims, _, all_const = op.legalize_operands(op.operands, inputs, namespace)
     if all_const:
-        return True, (Constant(op.compute(None, None, [v.val for v in newoperands])), PureNumber())
+        return True, (Constant(op.compute(inputs, namespace, [v.val for v in newoperands])), PureNumber())
     return False, (newoperands, dims)
 
 class AutoPassdownAndFoldTrait(ABC):
@@ -210,8 +210,8 @@ class AutoPassdownAndFoldTrait(ABC):
     def on_fold_fail(*args) -> Tuple['Op', Dimension]:
         pass
 
-    def legalize(self) -> Tuple['Op', Dimension]:
-        all_const, ret =  _legalize_or_compute(self)
+    def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
+        all_const, ret =  _legalize_or_compute(self, inputs, namespace)
         if all_const:
             return ret
         self.operands = ret[0]
@@ -226,13 +226,14 @@ class WindowedOp(HasConstArgTrait, Op):
 
 class AutoPassdownForbidConstantTrait(ABC):
     @abstractmethod
-    def on_non_const(dims: List[Dimension]) -> Tuple['Op', Dimension]:
+    def on_non_const(self, dims: List[Dimension]) -> Tuple['Op', Dimension]:
         pass
-    def legalize(self) -> Tuple['Op', Dimension]:
-        newoperands, dims, first_const, all_const = self.legalize_operands(self.operands)
+    def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
+        non_const_operands = self.operands[0:self.num_args()]
+        newoperands, dims, first_const, all_const = self.legalize_operands(non_const_operands, inputs, namespace)
         if first_const is not None:
             return first_const, PureNumber()
-        self.operands = newoperands
+        self.operands = non_const_operands + self.operands[self.num_args():]
         return self.on_non_const(dims)
 
 
@@ -247,8 +248,8 @@ class AddLike(AutoPassdownAndFoldTrait, BinaryOp):
 class RankLike(NoConstArgTrait, OneArgTrait, Op):
     def __init__(self, v: Op) -> None:
         super().__init__([v])
-    def legalize(self) -> Tuple['Op', Dimension]:
-        newoperands, _, _, all_const = self.legalize_operands(self.operands)
+    def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
+        newoperands, _, _, all_const = self.legalize_operands(self.operands, inputs, namespace)
         if all_const:
             return newoperands[0], PureNumber()
         self.operands = newoperands
@@ -263,10 +264,15 @@ class Add(AddLike):
     def compute(self, inputs, namespace, args) -> Any:
         return args[0] + args[1]
 
-
 class Sub(AddLike):
     def compute(self, inputs, namespace, args) -> Any:
         return args[0] - args[1]
+
+class Min(AddLike):
+    pass
+
+class Max(AddLike):
+    pass
 
 class Mul(AutoPassdownAndFoldTrait, BinaryOp):
     def compute(self, inputs, namespace, args) -> Any:
@@ -340,7 +346,7 @@ input_nodes = {
     "amount": amount
 }
 all_ops = [Rank, Add, Sub, Mul, Div, TsSum, TsStddev, TsMean, TsCorrelation, TsCovariance, TsRank, TsMin, TsMax, Delay, Delta,
-    TsArgMax, TsArgMin, DecayLinear, Scale]
+    TsArgMax, TsArgMin, DecayLinear, Scale, Min, Max]
 opname_2_class = dict([(clzz.__name__, clzz) for clzz in all_ops])
 
 

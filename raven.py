@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from Raven.Support import GeneDc2, PartialFunction, gep_simple
 from concurrent.futures import ProcessPoolExecutor
 import Raven.Multiprocess
+import Raven.Eval.kunquant_eval
 
 @dataclass
 class SharedMemory:
@@ -101,25 +102,38 @@ if __name__ == "__main__":
     stats.register("max", np.max)
 
     # size of population and number of generations
-    n_pop = 250
-    n_gen = 1000
-    n_elites = 10
+    n_pop = 300
+    n_gen = 150
+    n_elites = 30
 
     pop = toolbox.population(n=n_pop)
-    hof = tools.HallOfFame(30, similar=lambda x,y: str(x) == str(y))   # only record the best three individuals ever found in all generations
+    hof = tools.HallOfFame(30, similar=lambda x,y: str(x) == str(y) or x.fitness == y.fitness)   # only record the best three individuals ever found in all generations
     
 
     data = Raven.Eval.loader.loaddata("D:\\Menooker\\quant_data\\12y_5m\\out.npz", "D:\\Menooker\\quant_data\\12y_5m\\dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
-    np_data = {}
-    for k, v in data.items():
-        np_data[k] = Raven.Multiprocess.numpy_to_shared_array(np.ascontiguousarray(v.to_numpy()))
-    del data
-    Raven.Multiprocess.init(np_data, test_setter)
-    pool = ProcessPoolExecutor(6, initializer=Raven.Multiprocess.init, initargs=(np_data, test_setter))
-    toolbox.register("map", pool.map)
-    # start evolution
-    pop, log = gep_simple(pop, toolbox, n_generations=n_gen, n_elites=n_elites,
-                            stats=stats, hall_of_fame=hof, verbose=True)
-    pool.shutdown()
+    use_pandas = False
+    if use_pandas:
+        np_data = {}
+        for k, v in data.items():
+            np_data[k] = Raven.Multiprocess.numpy_to_shared_array(np.ascontiguousarray(v.to_numpy()))
+        del data
+        Raven.Multiprocess.init(np_data, test_setter)
+        pool = ProcessPoolExecutor(6, initializer=Raven.Multiprocess.init, initargs=(np_data, test_setter))
+        toolbox.register("map", pool.map)
+        # start evolution
+        pop, log = gep_simple(pop, toolbox, n_generations=n_gen, n_elites=n_elites,
+                                stats=stats, hall_of_fame=hof, verbose=True)
+        pool.shutdown()
+    else:
+        np_data = {}
+        for k, v in data.items():
+            np_data[k] = np.ascontiguousarray(v.to_numpy())
+        del data
+        def mapper(dummy, indvs):
+            return Raven.Eval.kunquant_eval.evaluate_batch(indvs, pset, np_data)
+        toolbox.register("map", mapper)
+        # start evolution
+        pop, log = gep_simple(pop, toolbox, n_generations=n_gen, n_elites=n_elites,
+                                stats=stats, hall_of_fame=hof, verbose=True)
     for h in hof:
         print(h)
