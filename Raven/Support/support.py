@@ -4,6 +4,8 @@ from geppy.core.symbol import Function, RNCTerminal, Terminal
 from geppy.algorithms.basic import _validate_basic_toolbox, _apply_modification, _apply_crossover
 import deap
 import Raven.Ops
+import pickle
+import random
 
 class PartialFunction(Function):
     def __init__(self, name, arity, val):
@@ -58,13 +60,11 @@ class GeneDc2(GeneDc):
     def __repr__(self):
         return super().__repr__() + ', rnc_array=[' + ', '.join(str(num) for num in self.rnc_array) + ']'
 
-def gep_simple(population, toolbox, n_generations=100, n_elites=1,
+def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_elites=1,
                stats=None, hall_of_fame=None, verbose=__debug__):
     _validate_basic_toolbox(toolbox)
-    logbook = deap.tools.Logbook()
-    logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
 
-    for gen in range(n_generations + 1):
+    for gen in range(start_gen, n_generations+1):
         # evaluate: only evaluate the invalid ones, i.e., no need to reevaluate the unchanged ones
         invalid_individuals = list(dict([(str(ind),ind) for ind in population if not ind.fitness.valid]).values())
         fitnesses = toolbox.map(toolbox.evaluate, invalid_individuals)
@@ -83,7 +83,7 @@ def gep_simple(population, toolbox, n_generations=100, n_elites=1,
             break
 
         # selection with elitism
-        elites = deap.tools.selTournament(no_rep, k=n_elites, tournsize=15)
+        elites = deap.tools.selTournament(no_rep, k=n_elites-1, tournsize=15) + deap.tools.selBest(no_rep, k=1)
         offspring = toolbox.select(no_rep, len(population) - n_elites)
 
         # replication
@@ -101,5 +101,12 @@ def gep_simple(population, toolbox, n_generations=100, n_elites=1,
 
         # replace the current population with the offsprings
         population = elites + offspring
+        if (gen + 1) % 50 == 0:
+            # Fill the dictionary using the dict(key=value[, ...]) constructor
+            cp = dict(population=population, generation=gen, halloffame=hall_of_fame,
+                      logbook=logbook, rndstate=random.getstate())
+
+            with open("./tmp/checkpoint_name.pkl", "wb") as cp_file:
+                pickle.dump(cp, cp_file)
 
     return population, logbook

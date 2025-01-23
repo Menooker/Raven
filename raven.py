@@ -14,6 +14,8 @@ from Raven.Support import GeneDc2, PartialFunction, gep_simple
 from concurrent.futures import ProcessPoolExecutor
 import Raven.Multiprocess
 import Raven.Eval.kunquant_eval
+import pickle
+import deap
 
 @dataclass
 class SharedMemory:
@@ -93,7 +95,26 @@ toolbox.register('mut_transpose_dc', gep.transpose_dc, pb=0.1)
 toolbox.register('mut_rnc_array_dc', gep.mutate_rnc_array_dc, rnc_gen=toolbox.rnc_gen, ind_pb='0.5p')
 toolbox.pbs['mut_rnc_array_dc'] = 1  # we can also give the probability via the pbs property
 
+def load_chkpt(n_pop, fn):
+    if fn:
+        # A file name has been given, then load the data from the file
+        with open(fn, "rb") as cp_file:
+            cp = pickle.load(cp_file)
+        population = cp["population"]
+        start_gen = cp["generation"]
+        halloffame = cp["halloffame"]
+        logbook = cp["logbook"]
+        random.setstate(cp["rndstate"])
+        return population, start_gen, halloffame, logbook
+    else:
+        pop = toolbox.population(n=n_pop)
+        hof = tools.HallOfFame(30, similar=is_pop_similar)   # only record the best three individuals ever found in all generations
+        logbook = deap.tools.Logbook()
+        logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+        return pop, 0, hof, logbook
 
+def is_pop_similar(x, y):
+    return str(x) == str(y) or x.fitness == y.fitness
 if __name__ == "__main__":
     stats = tools.Statistics(key=lambda ind: ind.fitness.values[0])
     stats.register("avg", np.mean)
@@ -103,14 +124,15 @@ if __name__ == "__main__":
 
     # size of population and number of generations
     n_pop = 300
-    n_gen = 150
+    n_gen = 3000
     n_elites = 30
 
-    pop = toolbox.population(n=n_pop)
-    hof = tools.HallOfFame(30, similar=lambda x,y: str(x) == str(y) or x.fitness == y.fitness)   # only record the best three individuals ever found in all generations
-    
+    pop, start_gen, hof, logbook = load_chkpt(n_pop, "./tmp/checkpoint_name.pkl")
 
-    data = Raven.Eval.loader.loaddata("D:\\Menooker\\quant_data\\12y_5m\\out.npz", "D:\\Menooker\\quant_data\\12y_5m\\dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
+
+    #data = Raven.Eval.loader.loaddata("D:\\Menooker\\quant_data\\12y_5m\\out.npz", "D:\\Menooker\\quant_data\\12y_5m\\dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
+    data = Raven.Eval.loader.loaddata("/mnt/d/Menooker/quant_data/12y_5m/out.npz", "/mnt/d/Menooker/quant_data/12y_5m/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
+    
     use_pandas = False
     if use_pandas:
         np_data = {}
@@ -121,7 +143,7 @@ if __name__ == "__main__":
         pool = ProcessPoolExecutor(6, initializer=Raven.Multiprocess.init, initargs=(np_data, test_setter))
         toolbox.register("map", pool.map)
         # start evolution
-        pop, log = gep_simple(pop, toolbox, n_generations=n_gen, n_elites=n_elites,
+        pop, log = gep_simple(logbook, pop, toolbox, start_gen, n_generations=n_gen, n_elites=n_elites,
                                 stats=stats, hall_of_fame=hof, verbose=True)
         pool.shutdown()
     else:
@@ -133,7 +155,7 @@ if __name__ == "__main__":
             return Raven.Eval.kunquant_eval.evaluate_batch(indvs, pset, np_data)
         toolbox.register("map", mapper)
         # start evolution
-        pop, log = gep_simple(pop, toolbox, n_generations=n_gen, n_elites=n_elites,
+        pop, log = gep_simple(logbook, pop, toolbox, start_gen, n_generations=n_gen, n_elites=n_elites,
                                 stats=stats, hall_of_fame=hof, verbose=True)
     for h in hof:
         print(h)

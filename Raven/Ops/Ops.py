@@ -233,7 +233,7 @@ class AutoPassdownForbidConstantTrait(ABC):
         newoperands, dims, first_const, all_const = self.legalize_operands(non_const_operands, inputs, namespace)
         if first_const is not None:
             return first_const, PureNumber()
-        self.operands = non_const_operands + self.operands[self.num_args():]
+        self.operands = newoperands + self.operands[self.num_args():]
         return self.on_non_const(dims)
 
 
