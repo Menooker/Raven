@@ -70,7 +70,7 @@ def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_eli
         fitnesses = toolbox.map(toolbox.evaluate, invalid_individuals)
         for ind, fit in zip(invalid_individuals, fitnesses):
             ind.fitness.values = fit
-        no_rep = list(dict([( (str(ind),ind.fitness.values[0]) ,ind) for ind in population if ind.fitness.valid]).values())
+        no_rep = list(dict([(ind.fitness.values[0] ,ind) for ind in population if ind.fitness.valid]).values())
         # record statistics and log
         if hall_of_fame is not None:
             hall_of_fame.update(no_rep)

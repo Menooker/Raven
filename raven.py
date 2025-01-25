@@ -61,9 +61,9 @@ pset = get_prim_set()
 creator.create("FitnessMax", base.Fitness, weights=(1,))  # to minimize the objective (fitness)
 creator.create("Individual", gep.Chromosome, fitness=creator.FitnessMax)
 
-h = 13 # head length
+h = 10 # head length
 n_genes = 1   # number of genes in a chromosome
-r = 12   # length of the RNC array
+r = 7   # length of the RNC array
 
 toolbox = gep.Toolbox()
 toolbox.register('rnc_gen', random.randint, a=1, b=30)   # each RNC is random integer within [-5, 5]
@@ -95,7 +95,7 @@ toolbox.register('mut_transpose_dc', gep.transpose_dc, pb=0.1)
 toolbox.register('mut_rnc_array_dc', gep.mutate_rnc_array_dc, rnc_gen=toolbox.rnc_gen, ind_pb='0.5p')
 toolbox.pbs['mut_rnc_array_dc'] = 1  # we can also give the probability via the pbs property
 
-def load_chkpt(n_pop, fn):
+def load_chkpt(n_pop, fn = None):
     if fn:
         # A file name has been given, then load the data from the file
         with open(fn, "rb") as cp_file:
@@ -124,10 +124,10 @@ if __name__ == "__main__":
 
     # size of population and number of generations
     n_pop = 300
-    n_gen = 3000
+    n_gen = 6000
     n_elites = 30
 
-    pop, start_gen, hof, logbook = load_chkpt(n_pop, "./tmp/checkpoint_name.pkl")
+    pop, start_gen, hof, logbook = load_chkpt(n_pop)#, "./tmp/checkpoint_name.pkl")
 
 
     #data = Raven.Eval.loader.loaddata("D:\\Menooker\\quant_data\\12y_5m\\out.npz", "D:\\Menooker\\quant_data\\12y_5m\\dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())

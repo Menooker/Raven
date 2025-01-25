@@ -172,11 +172,11 @@ class Constant(NoConstArgTrait, ZeroArgsTrait, Op):
     def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
         return self, PureNumber()
 
-def _get_first_non_const_dim(newoperands, dims) -> Dimension:
+def _get_first_non_const_dim(newoperands, dims) -> Tuple[Op, Dimension]:
         for op, dim in zip(newoperands, dims):
             if not isinstance(op, Constant):
-                return dim
-        return None
+                return op, dim
+        return None, None
 
 def _match_dims(ops: List['Op'], dims: List[Dimension], target: Dimension, allow_const_convert: bool) -> Dimension:
     need_match = False
@@ -200,14 +200,14 @@ class BinaryOp(NoConstArgTrait, TwoArgsTrait, Op):
         super().__init__([v1, v2])
 
 def _legalize_or_compute(op: Op, inputs, namespace):
-    newoperands, dims, _, all_const = op.legalize_operands(op.operands, inputs, namespace)
+    newoperands, dims, first_const, all_const = op.legalize_operands(op.operands, inputs, namespace)
     if all_const:
         return True, (Constant(op.compute(inputs, namespace, [v.val for v in newoperands])), PureNumber())
-    return False, (newoperands, dims)
+    return False, (newoperands, dims, first_const)
 
 class AutoPassdownAndFoldTrait(ABC):
     @abstractmethod
-    def on_fold_fail(*args) -> Tuple['Op', Dimension]:
+    def on_fold_fail(self, dimensions: List[Dimension], first_const: Op) -> Tuple['Op', Dimension]:
         pass
 
     def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
@@ -215,7 +215,7 @@ class AutoPassdownAndFoldTrait(ABC):
         if all_const:
             return ret
         self.operands = ret[0]
-        return self.on_fold_fail(ret[1])
+        return self.on_fold_fail(ret[1], ret[2])
 
 class WindowedOp(HasConstArgTrait, Op):
     def __init__(self, *args) -> None:
@@ -232,6 +232,9 @@ class AutoPassdownForbidConstantTrait(ABC):
         non_const_operands = self.operands[0:self.num_args()]
         newoperands, dims, first_const, all_const = self.legalize_operands(non_const_operands, inputs, namespace)
         if first_const is not None:
+            non_const, dim = _get_first_non_const_dim(newoperands, dims)
+            if non_const:
+                return non_const, dim
             return first_const, PureNumber()
         self.operands = newoperands + self.operands[self.num_args():]
         return self.on_non_const(dims)
@@ -240,8 +243,11 @@ class AutoPassdownForbidConstantTrait(ABC):
 class AddLike(AutoPassdownAndFoldTrait, BinaryOp):
     def __init__(self, v1: Op, v2: Op) -> None:
         super(BinaryOp, self).__init__([v1, v2])
-    def on_fold_fail(self, dims: List[Dimension]) -> Tuple['Op', Dimension]:
-        target = _get_first_non_const_dim(self.operands, dims)
+    def on_fold_fail(self, dims: List[Dimension], first_const: Op) -> Tuple['Op', Dimension]:
+        op, target = _get_first_non_const_dim(self.operands, dims)
+        if first_const:
+            assert(op)
+            return op, target
         return self, _match_dims(self.operands, dims, target, True)
 
 
@@ -277,7 +283,7 @@ class Max(AddLike):
 class Mul(AutoPassdownAndFoldTrait, BinaryOp):
     def compute(self, inputs, namespace, args) -> Any:
         return args[0] * args[1]
-    def on_fold_fail(self, dims: List[Dimension]) -> Tuple['Op', Dimension]:
+    def on_fold_fail(self, dims: List[Dimension], first_const: Op) -> Tuple['Op', Dimension]:
         return self, dims[0] * dims[1]
 
 class Div(AutoPassdownAndFoldTrait, BinaryOp):
@@ -285,7 +291,7 @@ class Div(AutoPassdownAndFoldTrait, BinaryOp):
         if isinstance(args[1], int) and args[1] == 0:
             return args[0]
         return args[0] / args[1]
-    def on_fold_fail(self, dims: List[Dimension]) -> Tuple['Op', Dimension]:
+    def on_fold_fail(self, dims: List[Dimension], first_const: Op) -> Tuple['Op', Dimension]:
         if isinstance(self.operands[1], Constant) and self.operands[1].val == 0:
             return self.operands[0], dims[0] 
         return self, dims[0] * (dims[1] ** -1)
@@ -317,6 +323,16 @@ class Delta(TsMeanLike):
     pass
 class DecayLinear(TsMeanLike):
     pass
+class ExpMovingAvg(TsMeanLike):
+    pass
+class WindowedLinearRegressionResi(TsMeanLike):
+    pass
+class WindowedLinearRegressionSlope(TsMeanLike):
+    pass
+
+class WindowedLinearRegressionRSqaure(OneArgTrait, AutoPassdownForbidConstantTrait, WindowedOp):
+    def on_non_const(self, dims: List[Dimension]) -> Tuple['Op', Dimension]:
+        return self, dims[0] * dims[0]
 
 class TsStddev(TsMeanLike):
     pass
@@ -335,6 +351,23 @@ class TsCovariance(TwoArgsTrait, AutoPassdownForbidConstantTrait, WindowedOp):
     def on_non_const(self, dims: List[Dimension]) -> Tuple['Op', Dimension]:
         return self, dims[0]
 
+class SelectIfGreater(NoConstArgTrait, Op):
+    @staticmethod
+    def num_args() -> int:
+        return 4
+    def __init__(self, lhs: Op, rhs: Op, candidateL: Op, candidateR: Op) -> None:
+        super().__init__([lhs, rhs, candidateL, candidateR])
+    def legalize(self, inputs, namespace) -> Tuple['Op', Dimension]:
+        Anewoperands, Anewdims, Afirst_const, Aall_const = self.legalize_operands(self.operands[0:2], inputs, namespace)
+        Bnewoperands, Bnewdims, Bfirst_const, Ball_const = self.legalize_operands(self.operands[2:], inputs, namespace)
+        if Afirst_const is not None or Bfirst_const is not None:
+            return Bnewoperands[0], Bnewdims[0]
+        Aop, Atarget = _get_first_non_const_dim(Anewoperands, Anewdims)
+        _match_dims(Anewoperands, Anewdims, Atarget, False)
+        Bop, Btarget = _get_first_non_const_dim(Bnewoperands, Bnewdims)
+        retdim = _match_dims(Bnewoperands, Bnewdims, Btarget, False)
+        self.operands = Anewoperands + Bnewoperands
+        return self, retdim
 
 
 input_nodes = {
@@ -346,7 +379,8 @@ input_nodes = {
     "amount": amount
 }
 all_ops = [Rank, Add, Sub, Mul, Div, TsSum, TsStddev, TsMean, TsCorrelation, TsCovariance, TsRank, TsMin, TsMax, Delay, Delta,
-    TsArgMax, TsArgMin, DecayLinear, Scale, Min, Max]
+    TsArgMax, TsArgMin, DecayLinear, Scale, Min, Max, ExpMovingAvg, WindowedLinearRegressionResi, WindowedLinearRegressionSlope,
+    WindowedLinearRegressionRSqaure, SelectIfGreater]
 opname_2_class = dict([(clzz.__name__, clzz) for clzz in all_ops])
 
 

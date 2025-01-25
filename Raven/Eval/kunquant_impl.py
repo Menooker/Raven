@@ -44,3 +44,6 @@ def min_like(number_min, op_min):
 
 Min = min_like(min, KunQuant.ops.Min)
 Max = min_like(max, KunQuant.ops.Max)
+
+def SelectIfGreater(lhs, rhs, vlhs, vrhs):
+    return Select(lhs > rhs, vlhs, vrhs)
