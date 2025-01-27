@@ -83,7 +83,7 @@ def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_eli
             break
 
         # selection with elitism
-        elites = deap.tools.selTournament(no_rep, k=n_elites-1, tournsize=15) + deap.tools.selBest(no_rep, k=1)
+        elites = deap.tools.selTournament(no_rep, k=n_elites-1, tournsize=5) + deap.tools.selBest(no_rep, k=1)
         offspring = toolbox.select(no_rep, len(population) - n_elites)
 
         # replication

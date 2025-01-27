@@ -61,9 +61,9 @@ pset = get_prim_set()
 creator.create("FitnessMax", base.Fitness, weights=(1,))  # to minimize the objective (fitness)
 creator.create("Individual", gep.Chromosome, fitness=creator.FitnessMax)
 
-h = 10 # head length
+h = 7 # head length
 n_genes = 1   # number of genes in a chromosome
-r = 7   # length of the RNC array
+r = 5   # length of the RNC array
 
 toolbox = gep.Toolbox()
 toolbox.register('rnc_gen', random.randint, a=1, b=30)   # each RNC is random integer within [-5, 5]
@@ -124,10 +124,10 @@ if __name__ == "__main__":
 
     # size of population and number of generations
     n_pop = 300
-    n_gen = 6000
-    n_elites = 30
+    n_gen = 8000
+    n_elites = 70
 
-    pop, start_gen, hof, logbook = load_chkpt(n_pop)#, "./tmp/checkpoint_name.pkl")
+    pop, start_gen, hof, logbook = load_chkpt(n_pop, "./tmp/checkpoint_name.pkl")
 
 
     #data = Raven.Eval.loader.loaddata("D:\\Menooker\\quant_data\\12y_5m\\out.npz", "D:\\Menooker\\quant_data\\12y_5m\\dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())

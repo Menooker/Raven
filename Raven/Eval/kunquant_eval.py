@@ -49,8 +49,8 @@ def evaluate_batch(indvs, pset, data):
         for idx, ind in enumerate(indvs):
             out = evaluate(ind, pset, inputs, idx)
             outs.append(out)
-    func = [("test", Function(builder.ops), KunCompilerConfig(input_layout="TS", output_layout="TS", split_source=25))]
-    lib = cfake.compileit(func, "test", cfake.CppCompilerConfig(opt_level=2, fast_linker_threads=4))
+    func = [("test", Function(builder.ops), KunCompilerConfig(input_layout="TS", output_layout="TS", split_source=20, partition_factor=10))]
+    lib = cfake.compileit(func, "test", cfake.CppCompilerConfig(opt_level=2, fast_linker_threads=4), "/tmp/tmpfs")
     # outbuf = {}
     # for idx, o in enumerate(outs):
     #     outbuf[o.attrs["name"]] = _cached.ret_data[idx]
