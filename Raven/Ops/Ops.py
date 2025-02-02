@@ -48,6 +48,15 @@ class ComplexDimension(Dimension):
 class MixedDimension(Dimension):
     @staticmethod
     def create(types: Dict[Dimension, float]) -> Dimension:
+        to_remove = []
+        for dim, d in types.items():
+            if nearly_eq(d, 0):
+                to_remove.append(dim)
+        if len(to_remove):
+            for v in to_remove:
+                del types[v]
+        if len(types) == 0:
+            return PureNumber()
         if len(types) == 1 and nearly_eq(next(iter(types.values())), 1):
             return next(iter(types.keys()))
         else:
@@ -57,7 +66,7 @@ class MixedDimension(Dimension):
         super().__init__()
         self.types = types
     def __eq__(self, o: object) -> bool:
-        if not isinstance(o, ComplexDimension):
+        if not isinstance(o, MixedDimension):
             return False
         return self.types == o.types
     def get_combine(self) -> Dict['Dimension', float]:
@@ -82,6 +91,9 @@ class Op(ABC):
     @abstractstaticmethod
     def has_const_arg() -> bool:
         return False
+
+    def print(self) -> str:
+        return f'''{self.__class__.__name__}({",".join([operand.print() for operand in self.operands])})'''
 
     def __init__(self, operands: List[Union['Op', float, int]]) -> None:
         super().__init__()
@@ -147,6 +159,8 @@ class HasConstArgTrait:
         return True
 
 class Input(NoConstArgTrait, ZeroArgsTrait, Op):
+    def print(self) -> str:
+        return self.name
     def __init__(self, name: str, dim: Dimension) -> None:
         super().__init__([])
         self.name = name
@@ -164,6 +178,8 @@ volume = Input("volume", Amount())
 amount = Input("amount", Money())
 
 class Constant(NoConstArgTrait, ZeroArgsTrait, Op):
+    def print(self) -> str:
+        return str(self.val)
     def __init__(self, v) -> None:
         super().__init__([])
         self.val = v
@@ -219,8 +235,12 @@ class AutoPassdownAndFoldTrait(ABC):
 
 class WindowedOp(HasConstArgTrait, Op):
     def __init__(self, *args) -> None:
+        if len(args) != self.num_args() + 1:
+            raise RuntimeError("Bad num args")
         self.window = args[-1]
         Op.__init__(self, args[:-1])
+    def print(self) -> str:
+        return f'''{self.__class__.__name__}({",".join([operand.print() for operand in self.operands] + [str(self.window)])})'''
     def compute(self, inputs, namespace, args) -> Any:
         return getattr(namespace, self.__class__.__name__)(*(args+[self.window]))
 
@@ -383,5 +403,22 @@ all_ops = [Rank, Add, Sub, Mul, Div, TsSum, TsStddev, TsMean, TsCorrelation, TsC
     WindowedLinearRegressionRSqaure, SelectIfGreater]
 opname_2_class = dict([(clzz.__name__, clzz) for clzz in all_ops])
 
-
+#print(Mul(Add(Add(TsStddev(volume, 33), Div(vopen, vlow)), Div(vclose, vlow)), TsRank(vclose, 3)).legalize(None, None)[0].print())
+#print(Div(Div(Scale(Min(vopen, vclose)), ExpMovingAvg(Div(vopen, vclose), 3)), vlow).legalize(None, None)[0].print())
 # TsMean(Div(volume, amount), 19).compute_recursive(None, None)
+def _test():
+    print("TEST")
+    op, dim = TsCorrelation(volume,Div(vopen, vlow),3).legalize(None, None)
+    print(op.print())
+    print(dim)
+    op, dim = TsCorrelation(4,Div(vopen, vlow),3).legalize(None, None)
+    print(op.print())
+    print(dim)
+    assert(Money() * Money() ** -1 == PureNumber())
+    assert(Money() * PureNumber() ** -1 == Money())
+    assert(Money() * PureNumber() == Money())
+    assert(Money() * Money() == MixedDimension({Money(): 2}))
+    assert(Money() * Amount() ** -1 == MixedDimension({Money(): 1, Amount():-1}))
+    
+if __name__ == "__main__":
+    _test()

@@ -51,7 +51,7 @@ def get_prim_set():
     return pset
 
 
-s = 1
+s = 1114514
 random.seed(s)
 np.random.seed(s)
 pset = get_prim_set()
@@ -61,12 +61,12 @@ pset = get_prim_set()
 creator.create("FitnessMax", base.Fitness, weights=(1,))  # to minimize the objective (fitness)
 creator.create("Individual", gep.Chromosome, fitness=creator.FitnessMax)
 
-h = 7 # head length
+h = 4 # head length
 n_genes = 1   # number of genes in a chromosome
-r = 5   # length of the RNC array
+r = 4   # length of the RNC array
 
 toolbox = gep.Toolbox()
-toolbox.register('rnc_gen', random.randint, a=1, b=30)   # each RNC is random integer within [-5, 5]
+toolbox.register('rnc_gen', random.randint, a=1, b=40)   # each RNC is random integer within [-5, 5]
 toolbox.register('gene_gen', GeneDc2, pset=pset, head_length=h, rnc_gen=toolbox.rnc_gen, rnc_array_length=r)
 toolbox.register('individual', creator.Individual, gene_gen=toolbox.gene_gen, n_genes=n_genes, linker=None)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
@@ -93,7 +93,7 @@ toolbox.register('mut_invert_dc', gep.invert_dc, pb=0.1)
 toolbox.register('mut_transpose_dc', gep.transpose_dc, pb=0.1)
 # for some uniform mutations, we can also assign the ind_pb a string to indicate our expected number of point mutations in an individual
 toolbox.register('mut_rnc_array_dc', gep.mutate_rnc_array_dc, rnc_gen=toolbox.rnc_gen, ind_pb='0.5p')
-toolbox.pbs['mut_rnc_array_dc'] = 1  # we can also give the probability via the pbs property
+# toolbox.pbs['mut_rnc_array_dc'] = 1  # we can also give the probability via the pbs property
 
 def load_chkpt(n_pop, fn = None):
     if fn:
@@ -123,11 +123,11 @@ if __name__ == "__main__":
     stats.register("max", np.max)
 
     # size of population and number of generations
-    n_pop = 300
+    n_pop = 350
     n_gen = 8000
     n_elites = 70
 
-    pop, start_gen, hof, logbook = load_chkpt(n_pop, "./tmp/checkpoint_name.pkl")
+    pop, start_gen, hof, logbook = load_chkpt(n_pop)#, "./tmp/checkpoint_name.pkl")
 
 
     #data = Raven.Eval.loader.loaddata("D:\\Menooker\\quant_data\\12y_5m\\out.npz", "D:\\Menooker\\quant_data\\12y_5m\\dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
