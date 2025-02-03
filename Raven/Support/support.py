@@ -83,7 +83,7 @@ def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_eli
             break
 
         # selection with elitism
-        elites = deap.tools.selTournament(no_rep, k=n_elites-5, tournsize=5) + deap.tools.selBest(no_rep, k=5)
+        elites = deap.tools.selBest(no_rep, k=n_elites)
         offspring = toolbox.select(no_rep, len(population) - n_elites)
 
         # replication
@@ -101,12 +101,14 @@ def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_eli
 
         # replace the current population with the offsprings
         population = elites + offspring
-        if (gen + 1) % 50 == 0:
+        if (gen + 1) % 100 == 0:
+            for h in hall_of_fame[:4]:
+                print(h)
             # Fill the dictionary using the dict(key=value[, ...]) constructor
             cp = dict(population=population, generation=gen, halloffame=hall_of_fame,
                       logbook=logbook, rndstate=random.getstate())
 
-            with open("./tmp/checkpoint_name.pkl", "wb") as cp_file:
+            with open("./tmp/checkpoint_name2.pkl", "wb") as cp_file:
                 pickle.dump(cp, cp_file)
 
     return population, logbook

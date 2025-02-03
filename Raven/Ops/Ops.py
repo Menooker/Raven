@@ -369,7 +369,7 @@ class TsCorrelation(TwoArgsTrait, AutoPassdownForbidConstantTrait, WindowedOp):
 
 class TsCovariance(TwoArgsTrait, AutoPassdownForbidConstantTrait, WindowedOp):
     def on_non_const(self, dims: List[Dimension]) -> Tuple['Op', Dimension]:
-        return self, dims[0]
+        return self, dims[0] * dims[1]
 
 class SelectIfGreater(NoConstArgTrait, Op):
     @staticmethod

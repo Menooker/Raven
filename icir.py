@@ -66,6 +66,13 @@ def build():
         Output(Rank(newalpha3), "newalpha3")
         names.append("newalpha3")
 
+        newalpha4 = KunOps.Div(KunOps.BackRef(KunOps.ExpMovingAvg(pack_158.low, 29), 1), KunOps.Sub(KunOps.Select(pack_158.high> pack_158.close, pack_158.close, pack_158.open), pack_158.low))
+        Output(Rank(newalpha4), "newalpha4")
+        names.append("newalpha4")
+
+        simple_return = KunOps.Div(KunOps.BackRef(pack_158.close, 1), pack_158.close)
+        Output(Rank(simple_return), "simple_return")
+        names.append("simple_return")
     f = Function(builder.ops)
     print("Total names: ", len(names))
 
@@ -96,4 +103,4 @@ for idx, (name,ic) in enumerate(zip(names, valid_ic)):
     ic = ic[start_window[name]:]
     ic = np.nan_to_num(ic, nan=0)
     #vic, vir = loader.get_ic_ir(pd.DataFrame(out[name]), pd.DataFrame(returns), start_window[name])
-    print(name, abs(np.mean(ic)), np.mean(ic)/np.std(ic))#, vic, vir)
+    print(name, np.mean(ic), np.mean(ic)/np.std(ic))#, vic, vir)

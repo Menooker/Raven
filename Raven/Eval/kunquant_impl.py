@@ -8,7 +8,6 @@ TsStddev = WindowedStddev
 TsSum = WindowedSum
 TsMean = WindowedAvg
 
-
 def TsCorrelation(x, y, window):
     return WindowedCorrelation(x,window,y)
 
