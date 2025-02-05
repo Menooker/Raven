@@ -16,6 +16,7 @@ import Raven.Multiprocess
 import Raven.Eval.kunquant_eval
 import pickle
 import deap
+import argparse
 
 @dataclass
 class SharedMemory:
@@ -51,51 +52,50 @@ def get_prim_set():
     return pset
 
 
-s = 19198101
-random.seed(s)
-np.random.seed(s)
-pset = get_prim_set()
+def init(h, n_genes, r):
+    pset = get_prim_set()
 
 
 
-creator.create("FitnessMax", base.Fitness, weights=(1,))  # to minimize the objective (fitness)
-creator.create("Individual", gep.Chromosome, fitness=creator.FitnessMax)
+    creator.create("FitnessMax", base.Fitness, weights=(1,1,1,1,1))  # to minimize the objective (fitness)
+    creator.create("Individual", gep.Chromosome, fitness=creator.FitnessMax)
 
-h = 6 # head length
-n_genes = 1   # number of genes in a chromosome
-r = 4   # length of the RNC array
+    # h = 5 # head length
+    # n_genes = 1   # number of genes in a chromosome
+    # r = 5   # length of the RNC array
 
-toolbox = gep.Toolbox()
-toolbox.register('rnc_gen', random.randint, a=1, b=40)   # each RNC is random integer within [-5, 5]
-toolbox.register('gene_gen', GeneDc2, pset=pset, head_length=h, rnc_gen=toolbox.rnc_gen, rnc_array_length=r)
-toolbox.register('individual', creator.Individual, gene_gen=toolbox.gene_gen, n_genes=n_genes, linker=None)
-toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+    toolbox = gep.Toolbox()
+    toolbox.register('rnc_gen', random.randint, a=1, b=40)   # each RNC is random integer within [-5, 5]
+    toolbox.register('gene_gen', GeneDc2, pset=pset, head_length=h, rnc_gen=toolbox.rnc_gen, rnc_array_length=r)
+    toolbox.register('individual', creator.Individual, gene_gen=toolbox.gene_gen, n_genes=n_genes, linker=None)
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
-# compile utility: which translates an individual into an executable function (Lambda)
-toolbox.register('compile', gep.compile_, pset=pset)
+    # compile utility: which translates an individual into an executable function (Lambda)
+    toolbox.register('compile', gep.compile_, pset=pset)
 
 
-toolbox.register('evaluate', evaluate)
+    toolbox.register('evaluate', evaluate)
 
-toolbox.register('select', tools.selTournament, tournsize=3)
-# 1. general operators
-toolbox.register('mut_uniform', gep.mutate_uniform, pset=pset, ind_pb=0.05, pb=1)
-toolbox.register('mut_invert', gep.invert, pb=0.1)
-toolbox.register('mut_is_transpose', gep.is_transpose, pb=0.1)
-toolbox.register('mut_ris_transpose', gep.ris_transpose, pb=0.1)
-toolbox.register('mut_gene_transpose', gep.gene_transpose, pb=0.1)
-toolbox.register('cx_1p', gep.crossover_one_point, pb=0.3)
-toolbox.register('cx_2p', gep.crossover_two_point, pb=0.2)
-toolbox.register('cx_gene', gep.crossover_gene, pb=0.1)
-# 2. Dc-specific operators
-toolbox.register('mut_dc', gep.mutate_uniform_dc, ind_pb=0.05, pb=1)
-toolbox.register('mut_invert_dc', gep.invert_dc, pb=0.1)
-toolbox.register('mut_transpose_dc', gep.transpose_dc, pb=0.1)
-# for some uniform mutations, we can also assign the ind_pb a string to indicate our expected number of point mutations in an individual
-toolbox.register('mut_rnc_array_dc', gep.mutate_rnc_array_dc, rnc_gen=toolbox.rnc_gen, ind_pb='0.5p')
-toolbox.pbs['mut_rnc_array_dc'] = 1  # we can also give the probability via the pbs property
+    toolbox.register('select', tools.selTournament, tournsize=3)
+    # 1. general operators
+    toolbox.register('mut_uniform', gep.mutate_uniform, pset=pset, ind_pb=0.05, pb=1)
+    toolbox.register('mut_invert', gep.invert, pb=0.1)
+    toolbox.register('mut_is_transpose', gep.is_transpose, pb=0.1)
+    toolbox.register('mut_ris_transpose', gep.ris_transpose, pb=0.1)
+    toolbox.register('mut_gene_transpose', gep.gene_transpose, pb=0.1)
+    toolbox.register('cx_1p', gep.crossover_one_point, pb=0.3)
+    toolbox.register('cx_2p', gep.crossover_two_point, pb=0.2)
+    toolbox.register('cx_gene', gep.crossover_gene, pb=0.1)
+    # 2. Dc-specific operators
+    toolbox.register('mut_dc', gep.mutate_uniform_dc, ind_pb=0.05, pb=1)
+    toolbox.register('mut_invert_dc', gep.invert_dc, pb=0.1)
+    toolbox.register('mut_transpose_dc', gep.transpose_dc, pb=0.1)
+    # for some uniform mutations, we can also assign the ind_pb a string to indicate our expected number of point mutations in an individual
+    toolbox.register('mut_rnc_array_dc', gep.mutate_rnc_array_dc, rnc_gen=toolbox.rnc_gen, ind_pb='0.5p')
+    toolbox.pbs['mut_rnc_array_dc'] = 1  # we can also give the probability via the pbs property
+    return toolbox, pset
 
-def load_chkpt(n_pop, fn = None):
+def load_chkpt(n_pop, toolbox, fn = None):
     if fn:
         # A file name has been given, then load the data from the file
         with open(fn, "rb") as cp_file:
@@ -116,23 +116,47 @@ def load_chkpt(n_pop, fn = None):
 def is_pop_similar(x, y):
     return str(x) == str(y) or x.fitness == y.fitness
 if __name__ == "__main__":
-    stats = tools.Statistics(key=lambda ind: ind.fitness.values[0])
+    parser = argparse.ArgumentParser(
+        prog="Generate input and reference output for alpha158 based on qlib commit a7d5a9b500de5df053e32abf00f6a679546636eb")
+    parser.add_argument("--head", default=5, type=int,
+                        help="gene head len")
+    parser.add_argument("--randlen", default=4, type=int,
+                        help="number of rand values")
+    parser.add_argument("--chkpt", default=None, type=str,
+                        help="The path to a dir for outputs")
+    parser.add_argument("--data", default="/mnt/d/Menooker/quant_data/12y_5m", type=str,
+                        help="The path to stock data")
+    parser.add_argument("--npop", default=350, type=int,
+                        help="number of population")
+    parser.add_argument("--ngen", default=5000, type=int,
+                        help="number of gen")
+    parser.add_argument("--nelites", default=5, type=int,
+                        help="number of nelites")
+    parser.add_argument("--seed", default=None, type=int,
+                        help="rand seed")
+    args = parser.parse_args()
+    if args.seed is not None:
+        s = args.seed
+        random.seed(s)
+        np.random.seed(s)
+    toolbox, pset = init(args.head, 1, args.randlen)
+    stats = tools.Statistics(key=lambda ind: ind.fitness.values[-1])
     stats.register("avg", np.mean)
     # stats.register("std", np.std)
     # stats.register("min", np.min)
     stats.register("max", np.max)
 
     # size of population and number of generations
-    n_pop = 350
-    n_gen = 8000
-    n_elites = 5
+    n_pop = args.npop
+    n_gen = args.ngen
+    n_elites = args.nelites
 
-    pop, start_gen, hof, logbook = load_chkpt(n_pop)#, "./tmp/checkpoint_name.pkl")
+    pop, start_gen, hof, logbook = load_chkpt(n_pop, toolbox, args.chkpt)
 
 
     #data = Raven.Eval.loader.loaddata("D:\\Menooker\\quant_data\\12y_5m\\out.npz", "D:\\Menooker\\quant_data\\12y_5m\\dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
-    data = Raven.Eval.loader.loaddata("/mnt/d/Menooker/quant_data/12y_5m/out.npz", "/mnt/d/Menooker/quant_data/12y_5m/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
-    
+    data = Raven.Eval.loader.loaddata(args.data+"/out.npz", args.data+"/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
+
     use_pandas = False
     if use_pandas:
         np_data = {}

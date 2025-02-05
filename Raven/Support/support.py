@@ -70,7 +70,7 @@ def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_eli
         fitnesses = toolbox.map(toolbox.evaluate, invalid_individuals)
         for ind, fit in zip(invalid_individuals, fitnesses):
             ind.fitness.values = fit
-        no_rep = list(dict([(ind.fitness.values[0] ,ind) for ind in population if ind.fitness.valid]).values())
+        no_rep = list(dict([(ind.fitness.values[-1] ,ind) for ind in population if ind.fitness.valid]).values())
         # record statistics and log
         if hall_of_fame is not None:
             hall_of_fame.update(no_rep)
@@ -101,14 +101,15 @@ def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_eli
 
         # replace the current population with the offsprings
         population = elites + offspring
-        if (gen + 1) % 100 == 0:
+        if (gen + 1) % 50 == 0:
             for h in hall_of_fame[:4]:
-                print(h)
-            # Fill the dictionary using the dict(key=value[, ...]) constructor
-            cp = dict(population=population, generation=gen, halloffame=hall_of_fame,
-                      logbook=logbook, rndstate=random.getstate())
+                print(h, h.fitness.values[-2])
+            if (gen + 1) % 100 == 0:
+              # Fill the dictionary using the dict(key=value[, ...]) constructor
+              cp = dict(population=population, generation=gen, halloffame=hall_of_fame,
+                        logbook=logbook, rndstate=random.getstate())
 
-            with open("./tmp/checkpoint_name2.pkl", "wb") as cp_file:
-                pickle.dump(cp, cp_file)
+              with open("./tmp/checkpoint_name2.pkl", "wb") as cp_file:
+                  pickle.dump(cp, cp_file)
 
     return population, logbook

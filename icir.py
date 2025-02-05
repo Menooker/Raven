@@ -1,8 +1,10 @@
 from KunQuant.Driver import KunCompilerConfig
 import Raven.Eval.loader as loader
+import Raven.Result.result
+from Raven.Result.corr import get_corr_with_existing_alphas, calc_existing_alphas
 from datetime import datetime
-import KunQuant.ops as KunOps
-import KunQuant.Op as KunOp
+from KunQuant.ops import *
+from KunQuant.Op import *
 from KunQuant.jit import cfake
 from KunQuant.predefined import Alpha101, Alpha158
 from KunQuant.runner import KunRunner as kr
@@ -13,75 +15,54 @@ from KunQuant.predefined.Alpha101 import AllData as AllData101
 import numpy as np
 import pandas as pd
 
-def build():
+def build(newonly):
     builder = Builder()
     with builder:
-        pack_158 = AllData158(low=Input("low"), high=Input("high"), close=Input(
-            "close"), open=Input("open"), amount=Input("amount"), volume=Input("volume"))
-        alpha158, names = pack_158.build({
-            'kbar': {},  # whether to use some hard-code kbar features
-            "price": {
-                "windows": [0],
-                "feature": [("OPEN", pack_158.open), ("HIGH", pack_158.high), ("LOW", pack_158.low), ("VWAP", pack_158.vwap)],
-            },
-            # 'volume': { # whether to use raw volume features
-            #     'windows': [0, 1, 2, 3, 4], # use volume at n days ago
-            # },
-            'rolling': {  # whether to use rolling operator based features
-                'windows': [5, 10, 20, 30, 60],  # rolling windows size
-                # if include is None we will use default operators
-                # 'exclude': ['RANK'], # rolling operator not to use
-            }
-        })
-        for v, k in zip(alpha158, names):
-            Output(Rank(v), k)
-        all_data = AllData101(low=pack_158.low,high=pack_158.high,close=pack_158.close,open=pack_158.open, amount=pack_158.amount, volume=pack_158.volume)
-        for f in Alpha101.all_alpha:
-            out = f(all_data)
-            Output(Rank(out), f.__name__)
-            names.append(f.__name__)
-        newalpha = KunOps.Mul(
-                KunOps.Add(
-                    Rank(
-                        KunOps.Add(
-                            Rank(KunOps.WindowedStddev(pack_158.volume, 33)),
-                            Rank(KunOps.Div(pack_158.open, pack_158.low))
-                            )),
-                    Rank(KunOps.Div(pack_158.close, pack_158.low))
-                    ),
-                KunOps.TsRank(pack_158.close, 3))
-        Output(Rank(newalpha), "newalpha")
-        names.append("newalpha")
-        newalpha2 = KunOps.Div(
-            KunOps.Add(
-                KunOps.WindowedMax(pack_158.close/ 9, 3),
-                KunOps.Select(KunOps.WindowedMax(pack_158.high, 7) > pack_158.close, pack_158.low, pack_158.close)
-                ),
-            pack_158.close)
-        Output(Rank(newalpha2), "newalpha2")
-        names.append("newalpha2")
-
-
-        newalpha3 = KunOps.Div(KunOps.Div(KunOp.Scale(KunOps.Min(pack_158.open,pack_158.close)),KunOps.ExpMovingAvg(KunOps.Div(pack_158.open,pack_158.close), 3)),pack_158.low)
-        Output(Rank(newalpha3), "newalpha3")
-        names.append("newalpha3")
-
-        newalpha4 = KunOps.Div(KunOps.BackRef(KunOps.ExpMovingAvg(pack_158.low, 29), 1), KunOps.Sub(KunOps.Select(pack_158.high> pack_158.close, pack_158.close, pack_158.open), pack_158.low))
-        Output(Rank(newalpha4), "newalpha4")
-        names.append("newalpha4")
-
-        simple_return = KunOps.Div(KunOps.BackRef(pack_158.close, 1), pack_158.close)
-        Output(Rank(simple_return), "simple_return")
-        names.append("simple_return")
+        low=Input("low")
+        high=Input("high")
+        close=Input("close")
+        open=Input("open")
+        amount=Input("amount")
+        volume=Input("volume")
+        names = []
+        if not newonly:
+            pack_158 = AllData158(low=low, high=high, close=close, open=open, amount=amount, volume=volume)
+            alpha158, names = pack_158.build({
+                'kbar': {},  # whether to use some hard-code kbar features
+                "price": {
+                    "windows": [0],
+                    "feature": [("OPEN", pack_158.open), ("HIGH", pack_158.high), ("LOW", pack_158.low), ("VWAP", pack_158.vwap)],
+                },
+                # 'volume': { # whether to use raw volume features
+                #     'windows': [0, 1, 2, 3, 4], # use volume at n days ago
+                # },
+                'rolling': {  # whether to use rolling operator based features
+                    'windows': [5, 10, 20, 30, 60],  # rolling windows size
+                    # if include is None we will use default operators
+                    # 'exclude': ['RANK'], # rolling operator not to use
+                }
+            })
+            for v, k in zip(alpha158, names):
+                Output(Rank(v), k)
+            all_data = AllData101(low=pack_158.low,high=pack_158.high,close=pack_158.close,open=pack_158.open, amount=pack_158.amount, volume=pack_158.volume)
+            for f in Alpha101.all_alpha:
+                out = f(all_data)
+                Output(Rank(out), f.__name__)
+                names.append(f.__name__)
+        for idx, v in enumerate(Raven.Result.result.get_alphas(low, high, close, open, amount, volume)):
+          name = f"alpha{idx}"
+          Output(Rank(v), name)
+          names.append(name)
     f = Function(builder.ops)
     print("Total names: ", len(names))
 
     jitm = cfake.compileit([("test", f, KunCompilerConfig(split_source=20, input_layout="TS", output_layout="TS"))], "test", cfake.CppCompilerConfig(), tempdir="/tmp/icir", keep_files=True)
     return jitm, names
-jitm, names = build()
+jitm, names = build(True)
 mod = jitm.getModule("test")
 
-data = loader.loaddata("/mnt/d/Menooker/quant_data/12y_5m/out.npz", "/mnt/d/Menooker/quant_data/12y_5m/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
+#("/mnt/d/Menooker/quant_data/12y_5m/out.npz", "/mnt/d/Menooker/quant_data/12y_5m/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
+data = loader.loaddata("/content/drive/MyDrive/qbot/12y_5m/out.npz", "/content/drive/MyDrive/qbot/12y_5m/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
 np_data = {}
 for k, v in data.items():
     np_data[k] = np.ascontiguousarray(v.to_numpy())
@@ -104,3 +85,5 @@ for idx, (name,ic) in enumerate(zip(names, valid_ic)):
     ic = np.nan_to_num(ic, nan=0)
     #vic, vir = loader.get_ic_ir(pd.DataFrame(out[name]), pd.DataFrame(returns), start_window[name])
     print(name, np.mean(ic), np.mean(ic)/np.std(ic))#, vic, vir)
+alphas,_ = calc_existing_alphas(executor, np_data)
+print(get_corr_with_existing_alphas(executor, np_data, [c for c in alphas.values()]))

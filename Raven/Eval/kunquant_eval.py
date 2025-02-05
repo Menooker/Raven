@@ -10,6 +10,7 @@ import Raven.Ops
 import pandas as pd
 import Raven.Eval.loader
 import Raven.Eval.kunquant_impl
+from Raven.Result.corr import get_corr_with_existing_alphas
 from dataclasses import dataclass
 import numpy as np
 
@@ -40,7 +41,27 @@ _cached: SharedMemory = None
 def test_setter(*args, **kwargs):
     global _cached
     _cached = SharedMemory(args, kwargs)
+
+def evaluate_exist_corr(c):
+  if c > 0.9:
+    return 0
+  if c > 0.8:
+    return 1
+  if c > 0.7:
+    return 2
+  if c > 0.6:
+    return 3
+  return 4
+def evaluate_exist_corr_lv1(c):
+  if c > 0.8:
+    return 1
+  if c > 0.7:
+    return 2
+  return 4
+
+_returns: np.ndarray = None
 def evaluate_batch(indvs, pset, data):
+    global _returns
     builder = Builder()
     outs = []
     with builder:
@@ -56,7 +77,8 @@ def evaluate_batch(indvs, pset, data):
     #     outbuf[o.attrs["name"]] = _cached.ret_data[idx]
     time = data["open"].shape[0]
     out = kr.runGraph(_get_executor(), lib.getModule("test"), data, 0, time)
-    returns = pd.DataFrame(data["returns"]).rank(axis=1, pct=True).astype("float32").to_numpy()
+    if _returns is None:
+      _returns = pd.DataFrame(data["returns"]).rank(axis=1, pct=True).astype("float32").to_numpy()
     valid_in = []
     valid_ic = []
     ind_buf = []
@@ -68,11 +90,14 @@ def evaluate_batch(indvs, pset, data):
             valid_ic.append(outbuf)
             ind_buf.append((idx, outbuf))
         else:
-            outs[idx] = (0,)
-    kr.corrWith(_get_executor(),"TS", valid_in, returns, valid_ic)
-    for idx, ic in ind_buf:
+            outs[idx] = (0,0,0,0,0)
+    kr.corrWith(_get_executor(),"TS", valid_in, _returns, valid_ic)
+    corrs = get_corr_with_existing_alphas(_get_executor(), data, valid_in)
+    for (idx, ic), exist_ic in zip(ind_buf, corrs):
         ic = ic[drop_head:]
         ic = np.nan_to_num(ic, nan=0)
-        outs[idx] = (abs(np.mean(ic)),)
+        mean_ic = abs(np.mean(ic))
+        #print(exist_ic)
+        outs[idx] = (int(mean_ic/0.02), evaluate_exist_corr_lv1(exist_ic), int(mean_ic/0.01), evaluate_exist_corr(exist_ic), mean_ic,)
     return outs
         
