@@ -49,16 +49,18 @@ def get_corr(executor, np_data: List[np.ndarray], corrwith: np.ndarray) -> np.nd
   for idx, inbuf in enumerate(np_data):
       outbuf = outbuf_shared[idx]
       valid_ic.append(outbuf)
-  kr.corrWith(executor,"TS", np_data, corrwith, valid_ic)
+  kr.corrWith(executor, np_data, corrwith, valid_ic, rank_inputs = True)
   ic = np.nanmean(outbuf_shared, axis=1)
   return ic
 
-def get_corr_with_existing_alphas(executor, ochl: Dict[str, np.ndarray], newalpha_data: List[np.ndarray]) -> List[float]:
+def get_corr_with_existing_alphas(executor, ochl: Dict[str, np.ndarray], newalpha_data: List[np.ndarray], printall = False) -> List[float]:
   oldalpha_data, _ = calc_existing_alphas(executor, ochl)
   ret = [0] * len(newalpha_data)
   for name, data in oldalpha_data.items():
-    #print("OLD", name)
+    if printall:
+      print("=======\nOLD", name)
     for idx, corr in enumerate(get_corr(executor, newalpha_data, data)):
-      #print(abs(corr))
+      if printall:
+        print(idx, abs(corr))
       ret[idx] = max(ret[idx], abs(corr))
   return ret

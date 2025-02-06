@@ -22,7 +22,7 @@ def evaluate(individual, pset, inputs, idx):
     ast, _ = ast.legalize(inputs, Raven.Eval.kunquant_impl)
     if isinstance(ast, Raven.Ops.Ops.Constant) or isinstance(ast, Raven.Ops.Ops.Input):
         return None
-    return Output(Rank(ast.compute_recursive(inputs, Raven.Eval.kunquant_impl)), "out" + str(idx))
+    return Output(ast.compute_recursive(inputs, Raven.Eval.kunquant_impl), "out" + str(idx))
 
 _executor = None
 def _get_executor():
@@ -70,7 +70,7 @@ def evaluate_batch(indvs, pset, data):
         for idx, ind in enumerate(indvs):
             out = evaluate(ind, pset, inputs, idx)
             outs.append(out)
-    func = [("test", Function(builder.ops), KunCompilerConfig(input_layout="TS", output_layout="TS", split_source=20, partition_factor=10))]
+    func = [("test", Function(builder.ops), KunCompilerConfig(input_layout="TS", output_layout="TS", split_source=15, partition_factor=6))]
     lib = cfake.compileit(func, "test", cfake.CppCompilerConfig(opt_level=2, fast_linker_threads=4))
     # outbuf = {}
     # for idx, o in enumerate(outs):
@@ -91,7 +91,7 @@ def evaluate_batch(indvs, pset, data):
             ind_buf.append((idx, outbuf))
         else:
             outs[idx] = (0,0,0,0,0)
-    kr.corrWith(_get_executor(),"TS", valid_in, _returns, valid_ic)
+    kr.corrWith(_get_executor(), valid_in, _returns, valid_ic, rank_inputs = True)
     corrs = get_corr_with_existing_alphas(_get_executor(), data, valid_in)
     for (idx, ic), exist_ic in zip(ind_buf, corrs):
         ic = ic[drop_head:]

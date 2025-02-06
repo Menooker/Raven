@@ -14,6 +14,15 @@ from KunQuant.predefined.Alpha158 import AllData as AllData158
 from KunQuant.predefined.Alpha101 import AllData as AllData101
 import numpy as np
 import pandas as pd
+import argparse
+
+
+parser = argparse.ArgumentParser(
+    prog="Generate input and reference output for alpha158 based on qlib commit a7d5a9b500de5df053e32abf00f6a679546636eb")
+parser.add_argument("--checkold", default=False, type=bool)
+parser.add_argument("--data", default="/mnt/d/Menooker/quant_data/12y_5m", type=str,
+                    help="The path to stock data")
+args = parser.parse_args()
 
 def build(newonly):
     builder = Builder()
@@ -58,11 +67,12 @@ def build(newonly):
 
     jitm = cfake.compileit([("test", f, KunCompilerConfig(split_source=20, input_layout="TS", output_layout="TS"))], "test", cfake.CppCompilerConfig(), tempdir="/tmp/icir", keep_files=True)
     return jitm, names
-jitm, names = build(True)
+jitm, names = build(not args.checkold)
 mod = jitm.getModule("test")
 
+
 #("/mnt/d/Menooker/quant_data/12y_5m/out.npz", "/mnt/d/Menooker/quant_data/12y_5m/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
-data = loader.loaddata("/content/drive/MyDrive/qbot/12y_5m/out.npz", "/content/drive/MyDrive/qbot/12y_5m/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
+data = loader.loaddata(args.data+"/out.npz", args.data+"/dates.pkl", datetime(2020, 1, 2).date(), datetime(2023, 1, 3).date())
 np_data = {}
 for k, v in data.items():
     np_data[k] = np.ascontiguousarray(v.to_numpy())
@@ -79,11 +89,11 @@ for idx, name in enumerate(names):
     outbuf = np.empty((time,), dtype="float32")
     valid_in.append(inbuf)
     valid_ic.append(outbuf)
-kr.corrWith(executor,"TS", valid_in, returns, valid_ic)
+kr.corrWith(executor, valid_in, returns, valid_ic)
 for idx, (name,ic) in enumerate(zip(names, valid_ic)):
     ic = ic[start_window[name]:]
     ic = np.nan_to_num(ic, nan=0)
     #vic, vir = loader.get_ic_ir(pd.DataFrame(out[name]), pd.DataFrame(returns), start_window[name])
     print(name, np.mean(ic), np.mean(ic)/np.std(ic))#, vic, vir)
 alphas,_ = calc_existing_alphas(executor, np_data)
-print(get_corr_with_existing_alphas(executor, np_data, [c for c in alphas.values()]))
+print(get_corr_with_existing_alphas(executor, np_data, [c for c in alphas.values()], True))
