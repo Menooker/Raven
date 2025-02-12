@@ -105,7 +105,7 @@ def load_chkpt(n_pop, toolbox, fn = None):
         halloffame = cp["halloffame"]
         logbook = cp["logbook"]
         random.setstate(cp["rndstate"])
-        return population, start_gen, halloffame, logbook
+        return population, start_gen+1, halloffame, logbook
     else:
         pop = toolbox.population(n=n_pop)
         hof = tools.HallOfFame(30, similar=is_pop_similar)   # only record the best three individuals ever found in all generations
@@ -117,13 +117,15 @@ def is_pop_similar(x, y):
     return str(x) == str(y) or x.fitness == y.fitness
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="Generate input and reference output for alpha158 based on qlib commit a7d5a9b500de5df053e32abf00f6a679546636eb")
+        prog="Raven factor generator")
     parser.add_argument("--head", default=5, type=int,
                         help="gene head len")
     parser.add_argument("--randlen", default=4, type=int,
                         help="number of rand values")
     parser.add_argument("--chkpt", default=None, type=str,
-                        help="The path to a dir for outputs")
+                        help="The path to a dir for checkpoint")
+    parser.add_argument("--chkpt-out", default=None, type=str,
+                        help="The path to a dir for checkpoint out")
     parser.add_argument("--data", default="/mnt/d/Menooker/quant_data/12y_5m", type=str,
                         help="The path to stock data")
     parser.add_argument("--npop", default=350, type=int,
@@ -168,7 +170,7 @@ if __name__ == "__main__":
         toolbox.register("map", pool.map)
         # start evolution
         pop, log = gep_simple(logbook, pop, toolbox, start_gen, n_generations=n_gen, n_elites=n_elites,
-                                stats=stats, hall_of_fame=hof, verbose=True)
+                                stats=stats, hall_of_fame=hof, verbose=True, chkpt_out=args.chkpt_out)
         pool.shutdown()
     else:
         np_data = {}

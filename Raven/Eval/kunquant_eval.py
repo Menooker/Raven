@@ -51,13 +51,15 @@ def evaluate_exist_corr(c):
     return 2
   if c > 0.6:
     return 3
-  return 4
+  if c > 0.5:
+    return 4
+  return 5
 def evaluate_exist_corr_lv1(c):
   if c > 0.8:
     return 1
-  if c > 0.7:
-    return 2
-  return 4
+  if c > 0.6:
+    return 3
+  return 5
 
 _returns: np.ndarray = None
 def evaluate_batch(indvs, pset, data):
@@ -98,6 +100,6 @@ def evaluate_batch(indvs, pset, data):
         ic = np.nan_to_num(ic, nan=0)
         mean_ic = abs(np.mean(ic))
         #print(exist_ic)
-        outs[idx] = (int(mean_ic/0.02), evaluate_exist_corr_lv1(exist_ic), int(mean_ic/0.01), evaluate_exist_corr(exist_ic), mean_ic,)
+        outs[idx] = (int(mean_ic/0.02), evaluate_exist_corr_lv1(exist_ic), int(mean_ic/0.005), evaluate_exist_corr(exist_ic), mean_ic,)
     return outs
         

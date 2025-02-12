@@ -1,4 +1,5 @@
 from KunQuant.Driver import KunCompilerConfig
+from numpy.core.fromnumeric import sort
 import Raven.Eval.loader as loader
 import Raven.Result.result
 from Raven.Result.corr import get_corr_with_existing_alphas, calc_existing_alphas
@@ -65,7 +66,7 @@ def build(newonly):
     f = Function(builder.ops)
     print("Total names: ", len(names))
 
-    jitm = cfake.compileit([("test", f, KunCompilerConfig(split_source=20, input_layout="TS", output_layout="TS"))], "test", cfake.CppCompilerConfig(), tempdir="/tmp/icir", keep_files=True)
+    jitm = cfake.compileit([("test", f, KunCompilerConfig(split_source=20, input_layout="TS", output_layout="TS"))], "test", cfake.CppCompilerConfig())
     return jitm, names
 jitm, names = build(not args.checkold)
 mod = jitm.getModule("test")
@@ -90,10 +91,21 @@ for idx, name in enumerate(names):
     valid_in.append(inbuf)
     valid_ic.append(outbuf)
 kr.corrWith(executor, valid_in, returns, valid_ic)
+ic_data = []
 for idx, (name,ic) in enumerate(zip(names, valid_ic)):
     ic = ic[start_window[name]:]
     ic = np.nan_to_num(ic, nan=0)
+    result = (name, np.mean(ic), np.mean(ic)/np.std(ic))
+    if start_window[name] > 50:
+        print(name, " window too long")
+    else:
+        ic_data.append(result)
     #vic, vir = loader.get_ic_ir(pd.DataFrame(out[name]), pd.DataFrame(returns), start_window[name])
-    print(name, np.mean(ic), np.mean(ic)/np.std(ic))#, vic, vir)
-alphas,_ = calc_existing_alphas(executor, np_data)
-print(get_corr_with_existing_alphas(executor, np_data, [c for c in alphas.values()], True))
+    print(*result)#, vic, vir)
+if not args.checkold:
+    alphas,_ = calc_existing_alphas(executor, np_data)
+    print(get_corr_with_existing_alphas(executor, np_data, [c for c in alphas.values()], True))
+else:
+    srt = sorted(ic_data, key=lambda x:abs(x[1]), reverse=True)
+    print(srt[:88])
+    print([v[0] for v in srt[:88]])

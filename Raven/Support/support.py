@@ -61,7 +61,7 @@ class GeneDc2(GeneDc):
         return super().__repr__() + ', rnc_array=[' + ', '.join(str(num) for num in self.rnc_array) + ']'
 
 def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_elites=1,
-               stats=None, hall_of_fame=None, verbose=__debug__):
+               stats=None, hall_of_fame=None, verbose=__debug__, chkpt_out = None):
     _validate_basic_toolbox(toolbox)
 
     for gen in range(start_gen, n_generations+1):
@@ -103,13 +103,13 @@ def gep_simple(logbook, population, toolbox, start_gen, n_generations=100, n_eli
         population = elites + offspring
         if (gen + 1) % 50 == 0:
             for h in hall_of_fame[:4]:
-                print(h, h.fitness.values[-2])
+                print(h, h.fitness.values[-2], h.fitness.values[-1])
             if (gen + 1) % 100 == 0:
-              # Fill the dictionary using the dict(key=value[, ...]) constructor
-              cp = dict(population=population, generation=gen, halloffame=hall_of_fame,
-                        logbook=logbook, rndstate=random.getstate())
-
-              with open("./tmp/checkpoint_name2.pkl", "wb") as cp_file:
-                  pickle.dump(cp, cp_file)
+                # Fill the dictionary using the dict(key=value[, ...]) constructor
+                cp = dict(population=population, generation=gen, halloffame=hall_of_fame,
+                            logbook=logbook, rndstate=random.getstate())
+                if chkpt_out:
+                    with open(chkpt_out, "wb") as cp_file:
+                        pickle.dump(cp, cp_file)
 
     return population, logbook
