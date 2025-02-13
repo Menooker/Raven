@@ -407,7 +407,7 @@ opname_2_class = dict([(clzz.__name__, clzz) for clzz in all_ops])
 #print(Div(Div(Scale(Min(vopen, vclose)), ExpMovingAvg(Div(vopen, vclose), 3)), vlow).legalize(None, None)[0].print())
 # TsMean(Div(volume, amount), 19).compute_recursive(None, None)
 def _test():
-    a=ExpMovingAvg(Min(Div(Div(amount, volume), vclose), Div(vopen, vhigh)), 2).legalize(None,None)[0].print()
+    a=Add(volume, TsCovariance(WindowedLinearRegressionResi(vlow, 16), Scale(vlow), 12)).legalize(None,None)[0].print()
     print(a)
     print("TEST")
     op, dim = TsCorrelation(volume,Div(vopen, vlow),3).legalize(None, None)

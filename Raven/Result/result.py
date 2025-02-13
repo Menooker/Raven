@@ -42,4 +42,5 @@ def get_alphas(low,
     Max(Rank(Mul(WindowedLinearRegressionRSqaure(amount,12),Select(close>open,Rank(volume),Rank(close)))),Rank(Div(close,low))),
     Select(Rank(WindowedCovariance(amount,4,low))>Rank(Div(low,close)),Rank(Div(close,low)),Rank(WindowedCovariance(volume,15, high))),
     ExpMovingAvg(Min(Rank(Div(Div(amount,volume),close)),Rank(Div(open,high))),2),
+    Add(Rank(volume),Rank(WindowedCovariance(WindowedLinearRegressionResi(low,16),12,Scale(low)))),
   ]
